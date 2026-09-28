@@ -1,0 +1,6 @@
+{
+  "name": "Dragon Line - Fluid Motion WebGL Experience",
+  "description": "High-octane Three.js WebGL dragon line visualizer with reactive modules, Raw Power soundtrack credit, and fat Gemini TTS rap vocals.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

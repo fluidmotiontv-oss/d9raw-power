@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dragon9 with Raw Power - Cinematic WebGL Pipeline</title>
+  <meta name="description" content="Dragon9 with Raw Power - Standalone Three.js WebGL Experience with Cinematic Camera, Lotus Enigma, and Embedded MPEG-4 Export Pipeline.">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: #050510;
+      color: #fff;
+      font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+      user-select: none;
+    }
+    #canvas-container {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+      cursor: grab;
+    }
+    #canvas-container:active { cursor: grabbing; }
+
+    /* Cinematic Widescreen Letterbox */
+    .letterbox-top {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 52px;
+      background: rgba(0, 0, 0, 0.94);
+      z-index: 20;
+      border-bottom: 1px solid rgba(0, 240, 255, 0.2);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+    }
+    .letterbox-bottom {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 58px;
+      background: rgba(0, 0, 0, 0.94);
+      z-index: 20;
+      border-top: 1px solid rgba(0, 240, 255, 0.2);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+    }
+
+    .brand-title {
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 1.5px;
+      color: #00f0ff;
+      text-shadow: 0 0 12px rgba(0, 240, 255, 0.6);
+    }
+    .brand-sub {
+      font-size: 10px;
+      color: #a5b4fc;
+    }
+    .credit-badge {
+      background: linear-gradient(90deg, rgba(239, 68, 68, 0.25), rgba(168, 85, 247, 0.25));
+      border: 1px solid rgba(244, 63, 94, 0.5);
+      border-radius: 8px;
+      padding: 5px 12px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #fbcfe8;
+      box-shadow: 0 0 15px rgba(244, 63, 94, 0.3);
+    }
+
+    /* On-Screen Watermark Badge */
+    .watermark-overlay {
+      position: absolute;
+      bottom: 74px;
+      right: 20px;
+      z-index: 15;
+      background: rgba(5, 5, 14, 0.85);
+      border: 1px solid rgba(0, 240, 255, 0.5);
+      border-radius: 10px;
+      padding: 10px 16px;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 0 25px rgba(0, 240, 255, 0.25);
+      pointer-events: none;
+      border-left: 4px solid #00f0ff;
+    }
+    .watermark-credit {
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      color: #ffffff;
+    }
+    .watermark-meta {
+      font-size: 10px;
+      color: #67e8f9;
+      margin-top: 2px;
+    }
+
+    /* HUD Controls */
+    .btn {
+      background: rgba(15, 15, 25, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #ddd;
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 11px;
+      font-family: inherit;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn:hover {
+      background: rgba(0, 240, 255, 0.2);
+      border-color: #00f0ff;
+      color: #fff;
+      box-shadow: 0 0 12px rgba(0, 240, 255, 0.4);
+    }
+    .btn-record {
+      background: linear-gradient(135deg, rgba(239, 68, 68, 0.8), rgba(217, 70, 239, 0.8));
+      border: 1px solid #f43f5e;
+      color: #fff;
+      font-weight: 700;
+      box-shadow: 0 0 15px rgba(244, 63, 94, 0.5);
+    }
+    .btn-record.recording {
+      animation: pulse 1s infinite;
+      background: #dc2626;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+    .pill-group {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .hud-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      color: #888;
+      letter-spacing: 1px;
+    }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+  <!-- Top Letterbox Bar -->
+  <div class="letterbox-top">
+    <div>
+      <div class="brand-title">DRAGON9 WITH RAW POWER</div>
+      <div class="brand-sub">Fluid Motion WebGL Experience // Cinematic Director Cut</div>
+    </div>
+    <div class="credit-badge">
+      Soundtrack Credit: RAW POWER (02:07)
+    </div>
+  </div>
+
+  <!-- Main 3D Canvas -->
+  <div id="canvas-container"></div>
+
+  <!-- Embedded Artist Watermark Plaque -->
+  <div class="watermark-overlay" id="watermark">
+    <div class="watermark-credit">DRAGON9 WITH RAW POWER</div>
+    <div class="watermark-meta">Fluid Motion WebGL Engine • 124 BPM • 60 FPS</div>
+  </div>
+
+  <!-- Bottom Letterbox Controls -->
+  <div class="letterbox-bottom">
+    <div class="pill-group">
+      <button class="btn" id="playBtn" onclick="toggleAudio()">▶ PLAY RAW POWER</button>
+      <button class="btn" onclick="cycleCamera()">🎥 CAMERA: <span id="camLabel">CINEMATIC</span></button>
+      <button class="btn" onclick="cycleTheme()">🎨 THEME: <span id="themeLabel">CYBER NEON</span></button>
+    </div>
+
+    <div class="pill-group">
+      <span class="hud-label">MPEG-4 Pipeline:</span>
+      <button class="btn btn-record" id="recordBtn" onclick="toggleMpeg4Record()">● EXPORT MPEG-4</button>
+    </div>
+  </div>
+
+  <script>
+    // =========================================================================
+    // DRAGON9 WITH RAW POWER: STANDALONE THREE.JS WEBGL RUNTIME
+    // Embedded WebGL file for visual artists, motion designers & developers.
+    // =========================================================================
+
+    const container = document.getElementById('canvas-container');
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+
+    // 1. Renderer Setup with preserveDrawingBuffer enabled for video recording
+    const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    renderer.setSize(width, height);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.25;
+    container.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x060611);
+    scene.fog = new THREE.FogExp2(0x060611, 0.014);
+
+    const camera = new THREE.PerspectiveCamera(52, width / height, 0.1, 1000);
+    camera.position.set(0, 16, 46);
+
+    // 2. Lights
+    const ambientLight = new THREE.AmbientLight(0x141026, 2.0);
+    scene.add(ambientLight);
+
+    const dirLight = new THREE.DirectionalLight(0xffffff, 2.5);
+    dirLight.position.set(30, 60, 40);
+    scene.add(dirLight);
+
+    const rimLight = new THREE.PointLight(0xff0055, 4.0, 120);
+    rimLight.position.set(-30, -10, -20);
+    scene.add(rimLight);
+
+    const headLight = new THREE.PointLight(0x00ffff, 5.0, 35);
+    scene.add(headLight);
+
+    // 3. Scrolling Purple & Cyan Fog Skydome Shader
+    const fogUniforms = {
+      uTime: { value: 0 },
+      uDeepColor: { value: new THREE.Color(0x060611) },
+      uPurpleColor: { value: new THREE.Color(0x7b2cbf) },
+      uCyanColor: { value: new THREE.Color(0x00f0ff) },
+      uIntensity: { value: 1.0 },
+    };
+
+    const fogMaterial = new THREE.ShaderMaterial({
+      uniforms: fogUniforms,
+      vertexShader: `
+        varying vec3 vWorldPos;
+        void main() {
+          vWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;
+          gl_Position = projectionMatrix * viewMatrix * vec4(vWorldPos, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform float uTime;
+        uniform vec3 uDeepColor;
+        uniform vec3 uPurpleColor;
+        uniform vec3 uCyanColor;
+        uniform float uIntensity;
+        varying vec3 vWorldPos;
+
+        void main() {
+          vec3 dir = normalize(vWorldPos);
+          float elevation = clamp(dir.y * 0.5 + 0.5, 0.0, 1.0);
+
+          float wave1 = sin(dir.x * 3.5 + uTime * 0.35) * cos(dir.z * 3.5 + uTime * 0.25);
+          float wave2 = sin((dir.x - dir.z) * 2.8 - uTime * 0.3) * cos(dir.y * 4.0 + uTime * 0.2);
+
+          float purpleFlow = smoothstep(-0.4, 0.6, wave1) * 0.32 * uIntensity;
+          float cyanFlow = smoothstep(-0.4, 0.6, wave2) * 0.28 * uIntensity;
+
+          vec3 col = uDeepColor;
+          col = mix(col, uPurpleColor, purpleFlow);
+          col = mix(col, uCyanColor, cyanFlow);
+
+          gl_FragColor = vec4(col, 1.0);
+        }
+      `,
+      side: THREE.BackSide,
+      depthWrite: false,
+    });
+
+    const fogDome = new THREE.Mesh(new THREE.SphereGeometry(380, 24, 18), fogMaterial);
+    scene.add(fogDome);
+
+    // 4. Cyber Dragon Mecha Geometry & Invariant IK Chain
+    const dragonGroup = new THREE.Group();
+    scene.add(dragonGroup);
+
+    const numSegments = 54;
+    const segSpacing = 1.35;
+    const spineNodes = [];
+    const spineSegments = [];
+
+    const scaleMat = new THREE.MeshStandardMaterial({
+      color: 0x00f0ff,
+      metalness: 0.85,
+      roughness: 0.2,
+      emissive: 0x00f0ff,
+      emissiveIntensity: 0.35,
+    });
+
+    const chassisMat = new THREE.MeshStandardMaterial({
+      color: 0x0d0d18,
+      metalness: 0.95,
+      roughness: 0.1,
+    });
+
+    const spikeMat = new THREE.MeshStandardMaterial({
+      color: 0xff0055,
+      emissive: 0xff0055,
+      emissiveIntensity: 0.6,
+      metalness: 0.5,
+      roughness: 0.2,
+    });
+
+    for (let i = 0; i < numSegments; i++) {
+      spineNodes.push(new THREE.Vector3(0, 0, -i * segSpacing));
+      const seg = new THREE.Group();
+
+      const taper = 1.0 - (i / numSegments) * 0.72;
+      const coreGeo = new THREE.CylinderGeometry(0.85 * taper, 1.0 * taper, segSpacing, 6);
+      coreGeo.rotateX(Math.PI / 2);
+      const core = new THREE.Mesh(coreGeo, chassisMat);
+      seg.add(core);
+
+      const plateGeo = new THREE.BoxGeometry(1.6 * taper, 0.4 * taper, segSpacing * 0.9);
+      plateGeo.translate(0, 0.6 * taper, 0);
+      const plate = new THREE.Mesh(plateGeo, scaleMat);
+      seg.add(plate);
+
+      if (i % 2 === 0 && i < 48) {
+        const spikeGeo = new THREE.ConeGeometry(0.35 * taper, 1.6 * taper, 4);
+        spikeGeo.rotateX(Math.PI / 6);
+        spikeGeo.translate(0, 1.3 * taper, -0.2);
+        const spike = new THREE.Mesh(spikeGeo, spikeMat);
+        seg.add(spike);
+      }
+
+      dragonGroup.add(seg);
+      spineSegments.push(seg);
+    }
+
+    // Dragon Head
+    const headGroup = new THREE.Group();
+    dragonGroup.add(headGroup);
+
+    const skullGeo = new THREE.ConeGeometry(1.6, 4.2, 6);
+    skullGeo.rotateX(Math.PI / 2);
+    const skull = new THREE.Mesh(skullGeo, chassisMat);
+    skull.position.set(0, 0.2, 1.8);
+    headGroup.add(skull);
+
+    // Glowing Eyes
+    const eyeMat = new THREE.MeshBasicMaterial({ color: 0x00ffff });
+    const eyeGeo = new THREE.SphereGeometry(0.28, 8, 8);
+    const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
+    leftEye.position.set(0.7, 0.6, 1.4);
+    const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
+    rightEye.position.set(-0.7, 0.6, 1.4);
+    headGroup.add(leftEye, rightEye);
+
+    // Horns
+    const hornGeo = new THREE.ConeGeometry(0.3, 3.2, 4);
+    hornGeo.rotateX(-Math.PI / 4);
+    const leftHorn = new THREE.Mesh(hornGeo, spikeMat);
+    leftHorn.position.set(0.8, 1.2, -0.6);
+    const rightHorn = new THREE.Mesh(hornGeo, spikeMat);
+    rightHorn.position.set(-0.8, 1.2, -0.6);
+    headGroup.add(leftHorn, rightHorn);
+
+    // 5. Lotus Enigma Module
+    const lotusGroup = new THREE.Group();
+    lotusGroup.position.set(0, -6, 0);
+    scene.add(lotusGroup);
+
+    const petalMat = new THREE.MeshStandardMaterial({
+      color: 0xff007f,
+      emissive: 0x7b2cbf,
+      emissiveIntensity: 0.5,
+      metalness: 0.4,
+      roughness: 0.3,
+      side: THREE.DoubleSide,
+    });
+
+    const numPetals = 16;
+    for (let p = 0; p < numPetals; p++) {
+      const angle = (p / numPetals) * Math.PI * 2;
+      const petalGeo = new THREE.ConeGeometry(1.2, 5.5, 4);
+      petalGeo.rotateZ(Math.PI / 3);
+      const petal = new THREE.Mesh(petalGeo, petalMat);
+      petal.position.set(Math.cos(angle) * 3.5, 0, Math.sin(angle) * 3.5);
+      petal.rotation.y = -angle;
+      lotusGroup.add(petal);
+    }
+
+    // 6. Fluttering Cyber Butterfly
+    const butterfly = new THREE.Group();
+    const wingMat = new THREE.MeshPhysicalMaterial({
+      color: 0x00f0ff,
+      emissive: 0xff0099,
+      emissiveIntensity: 0.8,
+      transparent: true,
+      opacity: 0.85,
+      side: THREE.DoubleSide,
+    });
+    const wingGeo = new THREE.BoxGeometry(1.4, 0.05, 0.9);
+    const leftWing = new THREE.Mesh(wingGeo, wingMat);
+    leftWing.position.set(0.7, 0, 0);
+    const rightWing = new THREE.Mesh(wingGeo, wingMat);
+    rightWing.position.set(-0.7, 0, 0);
+    butterfly.add(leftWing, rightWing);
+    scene.add(butterfly);
+
+    // 7. Ambient Dust Particles
+    const dustCount = 400;
+    const dustGeo = new THREE.BufferGeometry();
+    const dustPositions = new Float32Array(dustCount * 3);
+    for (let d = 0; d < dustCount * 3; d += 3) {
+      dustPositions[d] = (Math.random() - 0.5) * 120;
+      dustPositions[d + 1] = (Math.random() - 0.5) * 60;
+      dustPositions[d + 2] = (Math.random() - 0.5) * 120;
+    }
+    dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPositions, 3));
+    const dustMat = new THREE.PointsMaterial({ color: 0x00f0ff, size: 0.8, transparent: true, opacity: 0.6 });
+    const dustParticles = new THREE.Points(dustGeo, dustMat);
+    scene.add(dustParticles);
+
+    // Animation & Camera Choreography
+    let clock = new THREE.Clock();
+    let dragonTime = 0;
+    let cameraMode = 'cinematic'; // Default: Cinematic Director Cut
+    const cameraModes = ['cinematic', 'story-director', 'orbit', 'follow-dragon'];
+    let cameraModeIndex = 0;
+
+    const themes = [
+      { name: 'CYBER NEON', scale: 0x00f0ff, spike: 0xff0055, bg: 0x060611 },
+      { name: 'SOLAR FLARE', scale: 0xffa200, spike: 0xff2a00, bg: 0x0f0502 },
+      { name: 'TOXIC EMERALD', scale: 0x00ff88, spike: 0x00a86b, bg: 0x020c07 },
+      { name: 'PHANTOM VIOLET', scale: 0xc77dff, spike: 0x7b2cbf, bg: 0x080312 },
+    ];
+    let themeIndex = 0;
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const delta = clock.getDelta();
+      dragonTime += delta * 1.5;
+
+      fogUniforms.uTime.value = dragonTime;
+
+      // Butterfly trajectory
+      const bAngle = dragonTime * 0.9;
+      butterfly.position.set(Math.sin(bAngle) * 14, 4 + Math.sin(dragonTime * 2.5) * 3, Math.cos(bAngle) * 14);
+      butterfly.rotation.y = bAngle + Math.PI / 2;
+      leftWing.rotation.z = Math.sin(dragonTime * 18) * 0.7;
+      rightWing.rotation.z = -Math.sin(dragonTime * 18) * 0.7;
+
+      // Dragon Head Chase Target
+      const headTarget = butterfly.position.clone().add(new THREE.Vector3(0, -1.0, 0));
+      headGroup.position.lerp(headTarget, delta * 2.8);
+      headGroup.lookAt(butterfly.position);
+      headLight.position.copy(headGroup.position);
+
+      // Spine Invariant Kinematics
+      spineNodes[0].copy(headGroup.position);
+      for (let i = 1; i < numSegments; i++) {
+        const prev = spineNodes[i - 1];
+        const curr = spineNodes[i];
+        const dir = new THREE.Vector3().subVectors(curr, prev);
+        if (dir.lengthSq() > 0.0001) dir.normalize();
+        else dir.set(0, 0, -1);
+
+        const target = prev.clone().addScaledVector(dir, segSpacing);
+        curr.lerp(target, delta * 30.0);
+        const correctedDir = new THREE.Vector3().subVectors(curr, prev).normalize();
+        curr.copy(prev).addScaledVector(correctedDir, segSpacing);
+
+        const seg = spineSegments[i];
+        seg.position.copy(curr);
+        seg.lookAt(prev);
+      }
+
+      // Camera Choreography
+      const head = headGroup.position;
+      if (cameraMode === 'cinematic') {
+        const camX = Math.sin(dragonTime * 0.35) * 38;
+        const camY = Math.cos(dragonTime * 0.25) * 18 + 6;
+        const camZ = Math.cos(dragonTime * 0.22) * 44;
+        camera.position.lerp(new THREE.Vector3(camX, camY, camZ), delta * 2.0);
+        camera.lookAt(head);
+      } else if (cameraMode === 'orbit') {
+        const camAngle = dragonTime * 0.3;
+        camera.position.set(Math.sin(camAngle) * 45, 15, Math.cos(camAngle) * 45);
+        camera.lookAt(0, 0, 0);
+      } else if (cameraMode === 'follow-dragon') {
+        camera.position.lerp(new THREE.Vector3(head.x, head.y + 7, head.z + 28), delta * 4.0);
+        camera.lookAt(head);
+      } else {
+        // Story Director
+        camera.position.lerp(new THREE.Vector3(head.x + 14, head.y + 12, head.z + 24), delta * 3.0);
+        camera.lookAt(head);
+      }
+
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    function cycleCamera() {
+      cameraModeIndex = (cameraModeIndex + 1) % cameraModes.length;
+      cameraMode = cameraModes[cameraModeIndex];
+      document.getElementById('camLabel').innerText = cameraMode.toUpperCase();
+    }
+
+    function cycleTheme() {
+      themeIndex = (themeIndex + 1) % themes.length;
+      const th = themes[themeIndex];
+      scaleMat.color.setHex(th.scale);
+      scaleMat.emissive.setHex(th.scale);
+      spikeMat.color.setHex(th.spike);
+      spikeMat.emissive.setHex(th.spike);
+      scene.background.setHex(th.bg);
+      scene.fog.color.setHex(th.bg);
+      fogUniforms.uDeepColor.value.setHex(th.bg);
+      document.getElementById('themeLabel').innerText = th.name;
+    }
+
+    // Web Audio Synthesizer (Raw Power 124 BPM)
+    let audioCtx = null;
+    let isPlayingAudio = false;
+    let audioTimer = null;
+
+    function toggleAudio() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      isPlayingAudio = !isPlayingAudio;
+      const btn = document.getElementById('playBtn');
+
+      if (isPlayingAudio) {
+        btn.innerText = '⏸ PAUSE RAW POWER';
+        btn.style.borderColor = '#00f0ff';
+        startBeatLoop();
+      } else {
+        btn.innerText = '▶ PLAY RAW POWER';
+        btn.style.borderColor = '';
+        if (audioTimer) clearInterval(audioTimer);
+      }
+    }
+
+    function startBeatLoop() {
+      let step = 0;
+      const interval = (60 / 124) * 1000 / 2; // 8th notes
+      audioTimer = setInterval(() => {
+        if (!audioCtx || !isPlayingAudio) return;
+        const now = audioCtx.currentTime;
+
+        // Kick / 808 sub on quarter notes
+        if (step % 2 === 0) {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.frequency.setValueAtTime(140, now);
+          osc.frequency.exponentialRampToValueAtTime(45, now + 0.25);
+          gain.gain.setValueAtTime(0.7, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.start(now);
+          osc.stop(now + 0.35);
+        }
+
+        // Cyber Arp Synth
+        const notes = [220, 261.63, 329.63, 392, 523.25];
+        const freq = notes[step % notes.length];
+        const sOsc = audioCtx.createOscillator();
+        const sGain = audioCtx.createGain();
+        sOsc.type = 'sawtooth';
+        sOsc.frequency.setValueAtTime(freq, now);
+        sGain.gain.setValueAtTime(0.12, now);
+        sGain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+        sOsc.connect(sGain);
+        sGain.connect(audioCtx.destination);
+        sOsc.start(now);
+        sOsc.stop(now + 0.18);
+
+        step++;
+      }, interval);
+    }
+
+    // Embedded MediaRecorder MPEG-4 Pipeline
+    let mediaRecorder = null;
+    let recordedChunks = [];
+    let isRecordingVideo = false;
+
+    function toggleMpeg4Record() {
+      const btn = document.getElementById('recordBtn');
+      if (isRecordingVideo) {
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+          mediaRecorder.stop();
+        }
+        return;
+      }
+
+      // Start recording
+      const stream = renderer.domElement.captureStream(60);
+      const mime = MediaRecorder.isTypeSupported('video/mp4;codecs=avc1') ? 'video/mp4;codecs=avc1'
+                 : MediaRecorder.isTypeSupported('video/mp4') ? 'video/mp4'
+                 : 'video/webm';
+
+      mediaRecorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 16000000 });
+      recordedChunks = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) recordedChunks.push(e.data);
+      };
+
+      mediaRecorder.onstop = () => {
+        const ext = mime.includes('mp4') ? 'mp4' : 'webm';
+        const blob = new Blob(recordedChunks, { type: mime });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'Dragon9_with_Raw_Power_Cinematic.' + ext;
+        a.click();
+        isRecordingVideo = false;
+        btn.innerText = '● EXPORT MPEG-4';
+        btn.classList.remove('recording');
+      };
+
+      mediaRecorder.start();
+      isRecordingVideo = true;
+      btn.innerText = '■ STOP & SAVE';
+      btn.classList.add('recording');
+
+      // Auto stop after 15 seconds
+      setTimeout(() => {
+        if (isRecordingVideo) toggleMpeg4Record();
+      }, 15000);
+    }
+  </script>
+</body>
+</html>
